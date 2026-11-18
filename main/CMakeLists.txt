@@ -14,7 +14,7 @@ add_custom_command(
     OUTPUT "${font_data}"
     COMMAND "${python}" "${font_generator}" "${font_bdf}" "${font_data}"
     DEPENDS "${font_bdf}" "${font_generator}"
-    COMMENT "Generating 16x16 Chinese font from WenQuanYi BDF"
+    COMMENT "Generating 16-pixel OLED font from WenQuanYi BDF"
     VERBATIM
 )
 

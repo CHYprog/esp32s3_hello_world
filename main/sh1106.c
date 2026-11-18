@@ -11,9 +11,8 @@
 #define OLED_COL_OFFSET  2
 
 #define OLED_PAGES       (SH1106_HEIGHT / 8)
-#define ASCII_WIDTH      6
-#define ASCII_HEIGHT     8
-#define ZH16_SIZE        16
+#define FONT_HEIGHT      16
+#define ZH16_WIDTH       16
 
 // I2C总线和设备句柄
 static i2c_master_bus_handle_t s_bus = NULL;
@@ -257,125 +256,30 @@ esp_err_t SH1106_Update(void)
     return ESP_OK;
 }
 
-static const uint8_t font_digits[10][5] = {
-    {0x3E,0x51,0x49,0x45,0x3E}, // 0
-    {0x00,0x42,0x7F,0x40,0x00}, // 1
-    {0x42,0x61,0x51,0x49,0x46}, // 2
-    {0x21,0x41,0x45,0x4B,0x31}, // 3
-    {0x18,0x14,0x12,0x7F,0x10}, // 4
-    {0x27,0x45,0x45,0x45,0x39}, // 5
-    {0x3C,0x4A,0x49,0x49,0x30}, // 6
-    {0x01,0x71,0x09,0x05,0x03}, // 7
-    {0x36,0x49,0x49,0x49,0x36}, // 8
-    {0x06,0x49,0x49,0x29,0x1E}  // 9
-};
-
-static const uint8_t font_upper[26][5] = {
-    {0x7E,0x11,0x11,0x11,0x7E}, // A
-    {0x7F,0x49,0x49,0x49,0x36}, // B
-    {0x3E,0x41,0x41,0x41,0x22}, // C
-    {0x7F,0x41,0x41,0x22,0x1C}, // D
-    {0x7F,0x49,0x49,0x49,0x41}, // E
-    {0x7F,0x09,0x09,0x09,0x01}, // F
-    {0x3E,0x41,0x49,0x49,0x7A}, // G
-    {0x7F,0x08,0x08,0x08,0x7F}, // H
-    {0x00,0x41,0x7F,0x41,0x00}, // I
-    {0x20,0x40,0x41,0x3F,0x01}, // J
-    {0x7F,0x08,0x14,0x22,0x41}, // K
-    {0x7F,0x40,0x40,0x40,0x40}, // L
-    {0x7F,0x02,0x0C,0x02,0x7F}, // M
-    {0x7F,0x04,0x08,0x10,0x7F}, // N
-    {0x3E,0x41,0x41,0x41,0x3E}, // O
-    {0x7F,0x09,0x09,0x09,0x06}, // P
-    {0x3E,0x41,0x51,0x21,0x5E}, // Q
-    {0x7F,0x09,0x19,0x29,0x46}, // R
-    {0x46,0x49,0x49,0x49,0x31}, // S
-    {0x01,0x01,0x7F,0x01,0x01}, // T
-    {0x3F,0x40,0x40,0x40,0x3F}, // U
-    {0x1F,0x20,0x40,0x20,0x1F}, // V
-    {0x3F,0x40,0x38,0x40,0x3F}, // W
-    {0x63,0x14,0x08,0x14,0x63}, // X
-    {0x07,0x08,0x70,0x08,0x07}, // Y
-    {0x61,0x51,0x49,0x45,0x43}  // Z
-};
+typedef struct {
+    uint8_t width;
+    uint16_t rows[FONT_HEIGHT];
+} sh1106_ascii_glyph_t;
 
 typedef struct {
     uint16_t codepoint;
-    uint16_t rows[ZH16_SIZE];
+    uint16_t rows[FONT_HEIGHT];
 } sh1106_zh16_glyph_t;
 
-static const sh1106_zh16_glyph_t font_zh16[] = {
 #include "font_zh16.inc"
-};
 
-/**
- * @brief 将一个字符转换为包含 5 列像素数据的字模。
- *
- * @param ch 待查找的字符，小写英文字母会先转换为大写。
- * @return 指向静态只读字模的指针，每个字节表示一列，低位表示上方像素。
- *
- * 支持数字、英文字母、减号、冒号和句点，其余字符均返回空白字模。
- * 返回的数据在整个程序运行期间有效，由本文件持有。
- */
-static const uint8_t *sh1106_get_glyph(char ch)
+static const sh1106_ascii_glyph_t *sh1106_get_ascii_glyph(uint32_t codepoint)
 {
-    static const uint8_t space[5] =
-        {0,0,0,0,0};
-
-    static const uint8_t dash[5] =
-        {0x08,0x08,0x08,0x08,0x08};
-
-    static const uint8_t colon[5] =
-        {0x00,0x36,0x36,0x00,0x00};
-
-    static const uint8_t dot[5] =
-        {0x00,0x60,0x60,0x00,0x00};
-
-    if (ch >= '0' && ch <= '9')
-        return font_digits[ch - '0'];
-
-    if (ch >= 'a' && ch <= 'z')
-        ch = ch - 'a' + 'A';
-
-    if (ch >= 'A' && ch <= 'Z')
-        return font_upper[ch - 'A'];
-
-    if (ch == '-') return dash;
-    if (ch == ':') return colon;
-    if (ch == '.') return dot;
-
-    return space;
-}
-
-/**
- * @brief 将一个字模展开到缓冲区中，覆盖一个 6×8 像素区域。
- *
- * @param x 字符区域左上角横坐标。
- * @param y 字符区域左上角纵坐标。
- * @param ch 要显示的字符，字符集由 sh1106_get_glyph() 决定。
- *
- * 前 5 列按字模逐位绘制，第 6 列写入空白作为字符间隔。
- * 字模中的 0 也会写入，因此区域内原有的像素会被覆盖。
- * 超出屏幕的部分由 SH1106_DrawPixel() 裁剪，绘制后需要统一刷新。
- */
-void SH1106_DrawChar(int x, int y, char ch)
-{
-    const uint8_t *glyph = sh1106_get_glyph(ch);
-
-    for (int col = 0; col < ASCII_WIDTH; col++) {
-        uint8_t bits = (col < 5) ? glyph[col] : 0;
-
-        for (int row = 0; row < ASCII_HEIGHT; row++) {
-            bool on = ((bits >> row) & 1U) != 0;
-            SH1106_DrawPixel(x + col, y + row, on);
-        }
+    if (codepoint < ' ' || codepoint > '~') {
+        codepoint = ' ';
     }
+    return &font_ascii[codepoint - ' '];
 }
 
 // 字模表按 Unicode 码点排序，缺字时绘制空心方框。
 static const uint16_t *sh1106_get_zh16_glyph(uint32_t codepoint)
 {
-    static const uint16_t placeholder[ZH16_SIZE] = {
+    static const uint16_t placeholder[FONT_HEIGHT] = {
         0, 0, 0x3FFC, 0x2004, 0x2004, 0x2004, 0x2004, 0x2004,
         0x2004, 0x2004, 0x2004, 0x2004, 0x2004, 0x3FFC, 0, 0,
     };
@@ -398,15 +302,24 @@ static const uint16_t *sh1106_get_zh16_glyph(uint32_t codepoint)
     return placeholder;
 }
 
-static void sh1106_draw_zh16(int x, int y, uint32_t codepoint)
+static void sh1106_draw_glyph(int x, int y, const uint16_t *rows, int width)
 {
-    const uint16_t *rows = sh1106_get_zh16_glyph(codepoint);
-    for (int row = 0; row < ZH16_SIZE; row++) {
-        for (int col = 0; col < ZH16_SIZE; col++) {
+    if (x >= SH1106_WIDTH || y >= SH1106_HEIGHT) {
+        return;
+    }
+
+    for (int row = 0; row < FONT_HEIGHT; row++) {
+        for (int col = 0; col < width; col++) {
             bool on = (rows[row] & (0x8000U >> col)) != 0;
             SH1106_DrawPixel(x + col, y + row, on);
         }
     }
+}
+
+void SH1106_DrawChar(int x, int y, char ch)
+{
+    const sh1106_ascii_glyph_t *glyph = sh1106_get_ascii_glyph((unsigned char)ch);
+    sh1106_draw_glyph(x, y, glyph->rows, glyph->width);
 }
 
 // 逐字节读取续字节，遇到无效字节时留给下次解码。
@@ -461,38 +374,36 @@ void SH1106_DrawString(int x, int y, const char *str)
     }
 
     const unsigned char *cursor = (const unsigned char *)str;
-    const unsigned char *scan = cursor;
-    while (*scan != '\0' && *scan < 0x80) {
-        scan++;
-    }
-    // 全部是 ASCII 时保留原来的 8 像素行高。
-    int line_height = (*scan == '\0') ? ASCII_HEIGHT : ZH16_SIZE;
     int start_x = x;
 
-    while (*cursor != '\0' && y <= SH1106_HEIGHT - line_height) {
+    while (*cursor != '\0' && y <= SH1106_HEIGHT - FONT_HEIGHT) {
         uint32_t codepoint = sh1106_next_codepoint(&cursor);
         if (codepoint == '\n') {
             x = start_x;
-            y += line_height;
+            y += FONT_HEIGHT;
             continue;
         }
 
-        bool ascii = codepoint < 0x80;
-        int width = ascii ? ASCII_WIDTH : ZH16_SIZE;
+        const uint16_t *rows;
+        int width;
+        if (codepoint < 0x80) {
+            const sh1106_ascii_glyph_t *glyph = sh1106_get_ascii_glyph(codepoint);
+            rows = glyph->rows;
+            width = glyph->width;
+        } else {
+            rows = sh1106_get_zh16_glyph(codepoint);
+            width = ZH16_WIDTH;
+        }
+
         if (x != start_x && x > SH1106_WIDTH - width) {
             x = start_x;
-            y += line_height;
-            if (y > SH1106_HEIGHT - line_height) {
+            y += FONT_HEIGHT;
+            if (y > SH1106_HEIGHT - FONT_HEIGHT) {
                 break;
             }
         }
 
-        if (ascii) {
-            SH1106_DrawChar(x, y + (line_height - ASCII_HEIGHT) / 2,
-                           (char)codepoint);
-        } else {
-            sh1106_draw_zh16(x, y, codepoint);
-        }
+        sh1106_draw_glyph(x, y, rows, width);
         x += width;
     }
 }
