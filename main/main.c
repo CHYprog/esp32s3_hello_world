@@ -1,5 +1,4 @@
 
-
 #include <stdio.h>
 #include <stdint.h>
 
@@ -13,45 +12,39 @@ static const char *TAG = "MAIN";
 
 void app_main(void)
 {
-    // 等待 OLED 供电稳定
+    // 1. 等待 OLED 供电稳定
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // 初始化 OLED
+    // 2. 初始化 OLED
     ESP_ERROR_CHECK(SH1106_Init());
 
     ESP_LOGI(TAG, "OLED Init OK");
 
-    // 清除显示缓冲区
+    // 3. 清空显示缓冲区
     SH1106_Clear();
 
-    // 绘制四行文字
-    SH1106_DrawString(0, 0,  "你好 ESP32-S3");
-    SH1106_DrawString(0, 16, "显示正常");
-    SH1106_DrawString(0, 32, "计数: 123");
-    SH1106_DrawString(0, 48, "Hello OLED");
+    // 4. 绘制四行文字
+    SH1106_DrawString(0, 0,  "ESP32-S3");
+    SH1106_DrawString(0, 16, "Hello OLED");
+    SH1106_DrawString(0, 32, "显示正常");
+    SH1106_DrawString(0, 48, "Scroll Test");
 
-    // 将文字发送到 OLED
+    // 5. 将初始画面发送到屏幕
     ESP_ERROR_CHECK(SH1106_Update());
 
-    uint8_t scroll = 0;
-
+    // 6. 主循环
     while (1)
     {
-        // 设置当前滚动位置
-        ESP_ERROR_CHECK(
-            SH1106_SetScrollOffset(scroll)
-        );
+        // 第二行向左移动1像素
+        SH1106_ScrollHorizontalArea(16, 32, -1);
 
-        // 滚动一个像素
-        scroll++;
+        // 第四行向右移动1像素
+        SH1106_ScrollHorizontalArea(48, 64, 1);
 
-        // 到达64像素后从0重新开始
-        if (scroll >= SH1106_HEIGHT)
-        {
-            scroll = 0;
-        }
+        // 刷新OLED
+        ESP_ERROR_CHECK(SH1106_Update());
 
-        // 控制滚动速度
-        vTaskDelay(pdMS_TO_TICKS(30));
+        // 延时20ms
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

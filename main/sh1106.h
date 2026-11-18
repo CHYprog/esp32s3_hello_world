@@ -126,4 +126,22 @@ esp_err_t SH1106_Update(void);
  */
 esp_err_t SH1106_SetScrollOffset(uint8_t offset);
 
+
+
+/**
+ * @brief 指定区域水平循环滚动
+ *
+ * @param y_start 起始纵坐标（包含）
+ * @param y_end   结束纵坐标（不包含）
+ * @param pixels  滚动像素数
+ *                正数向右，负数向左
+ */
+void SH1106_ScrollHorizontalArea(
+    int y_start,
+    int y_end,
+    int pixels
+);
+
+
+
 #endif

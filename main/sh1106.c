@@ -428,3 +428,78 @@ esp_err_t SH1106_SetScrollOffset(uint8_t offset)
     return sh1106_cmd(0x40 | offset);
 }
 
+
+/**
+ * @brief 指定像素区域水平循环滚动
+ */
+void SH1106_ScrollHorizontalArea(
+    int y_start,
+    int y_end,
+    int pixels
+)
+{
+    // 1. 检查区域是否合法
+    if (y_start < 0 ||
+        y_end > SH1106_HEIGHT ||
+        y_start >= y_end)
+    {
+        return;
+    }
+
+    // 2. 计算滚动距离
+    int shift = pixels % SH1106_WIDTH;
+
+    if (shift < 0)
+    {
+        shift += SH1106_WIDTH;
+    }
+
+    if (shift == 0)
+    {
+        return;
+    }
+
+    // 3. 临时保存一页数据
+    uint8_t temp[SH1106_WIDTH];
+
+    // 4. 遍历指定区域涉及的页
+    int first_page = y_start / 8;
+    int last_page = (y_end - 1) / 8;
+
+    for (int page = first_page;
+         page <= last_page;
+         page++)
+    {
+        uint8_t *line =
+            &s_buffer[page * SH1106_WIDTH];
+
+        // 保存原始数据
+        memcpy(temp, line, SH1106_WIDTH);
+
+        // 计算本页哪些像素行需要移动
+        uint8_t mask = 0;
+
+        for (int bit = 0; bit < 8; bit++)
+        {
+            int y = page * 8 + bit;
+
+            if (y >= y_start && y < y_end)
+            {
+                mask |= (uint8_t)(1U << bit);
+            }
+        }
+
+        // 5. 水平移动指定像素位
+        for (int x = 0; x < SH1106_WIDTH; x++)
+        {
+            int src =
+                (x - shift + SH1106_WIDTH)
+                % SH1106_WIDTH;
+
+            // 保留区域外像素，只替换区域内像素
+            line[x] =
+                (temp[x] & (uint8_t)~mask) |
+                (temp[src] & mask);
+        }
+    }
+}
