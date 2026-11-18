@@ -1,0 +1,22 @@
+WenQuanYi Bitmap Song, 0.9.9.8 (16-pixel BDF)
+Copyright (C) 2004-2010, WenQuanYi Project Board of Trustees and Qianqian Fang.
+The font is distributed under GNU GPL version 2 with the font embedding exception below. See COPYING.
+
+BDF source:
+https://github.com/olikraus/u8g2/blob/d6c8499c5f2707cac8eccd09fd8f677d12b17977/tools/font/bdf/wenquanyi_12pt.bdf
+Git blob SHA-1: c21cfbf157fea6482dc67226af01537ef370d382
+
+COPYING and the exception below are from the WenQuanYi Bitmap Song 1.0.0-RC1 BDF package:
+https://github.com/keqingrong/wqy/blob/4602d1fc55cd3cbaadafba2414dc165c202a8b69/wqy-bitmapfont/1.0.0-RC1/wqy-bitmapsong-bdf-1.0.0-RC1.tar.gz
+
+** GPL v2.0 license with font embedding exception:
+
+As a special exception, if you create a document which uses this
+font, and embed this font or unaltered portions of this font into 
+the document, this font does not by itself cause the resulting 
+document to be covered by the GNU General Public License. This 
+exception does not however invalidate any other reasons why the 
+document might be covered by the GNU General Public License. If you 
+modify this font, you may extend this exception to your version of 
+the font, but you are not obligated to do so. If you do not wish to 
+do so, delete this exception statement from your version.

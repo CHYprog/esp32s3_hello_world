@@ -11,6 +11,9 @@
 #define OLED_COL_OFFSET  2
 
 #define OLED_PAGES       (SH1106_HEIGHT / 8)
+#define ASCII_WIDTH      6
+#define ASCII_HEIGHT     8
+#define ZH16_SIZE        16
 
 // I2C总线和设备句柄
 static i2c_master_bus_handle_t s_bus = NULL;
@@ -296,6 +299,15 @@ static const uint8_t font_upper[26][5] = {
     {0x61,0x51,0x49,0x45,0x43}  // Z
 };
 
+typedef struct {
+    uint16_t codepoint;
+    uint16_t rows[ZH16_SIZE];
+} sh1106_zh16_glyph_t;
+
+static const sh1106_zh16_glyph_t font_zh16[] = {
+#include "font_zh16.inc"
+};
+
 /**
  * @brief 将一个字符转换为包含 5 列像素数据的字模。
  *
@@ -350,54 +362,137 @@ void SH1106_DrawChar(int x, int y, char ch)
 {
     const uint8_t *glyph = sh1106_get_glyph(ch);
 
-    for (int col = 0; col < 6; col++) {
+    for (int col = 0; col < ASCII_WIDTH; col++) {
         uint8_t bits = (col < 5) ? glyph[col] : 0;
 
-        for (int row = 0; row < 8; row++) {
+        for (int row = 0; row < ASCII_HEIGHT; row++) {
             bool on = ((bits >> row) & 1U) != 0;
             SH1106_DrawPixel(x + col, y + row, on);
         }
     }
 }
 
-/**
- * @brief 逐字节绘制字符串，处理显式换行和右边界自动换行。
- *
- * @param x 首字符左上角横坐标，同时作为每次换行后的起始横坐标。
- * @param y 首行左上角纵坐标。
- * @param str 以 '\0' 结尾的字符串，NULL 会被忽略。
- *
- * 普通字符绘制后向右移动 6 像素。遇到 '\n'，或右侧剩余空间不足
- * 6 像素时，回到初始 x 并向下移动 8 像素。距底部不足 8 像素时，
- * 停止绘制后续字符。字模的覆盖行为与 SH1106_DrawChar() 一致。
- * @note 原有文字的尾部需要由调用方清除，绘制完成后调用 SH1106_Update()。
- */
+// 字模表按 Unicode 码点排序，缺字时绘制空心方框。
+static const uint16_t *sh1106_get_zh16_glyph(uint32_t codepoint)
+{
+    static const uint16_t placeholder[ZH16_SIZE] = {
+        0, 0, 0x3FFC, 0x2004, 0x2004, 0x2004, 0x2004, 0x2004,
+        0x2004, 0x2004, 0x2004, 0x2004, 0x2004, 0x3FFC, 0, 0,
+    };
+    size_t first = 0;
+    size_t last = sizeof(font_zh16) / sizeof(font_zh16[0]);
+
+    while (first < last) {
+        size_t middle = first + (last - first) / 2;
+        const sh1106_zh16_glyph_t *glyph = &font_zh16[middle];
+        if (codepoint == glyph->codepoint) {
+            return glyph->rows;
+        }
+        if (codepoint < glyph->codepoint) {
+            last = middle;
+        } else {
+            first = middle + 1;
+        }
+    }
+
+    return placeholder;
+}
+
+static void sh1106_draw_zh16(int x, int y, uint32_t codepoint)
+{
+    const uint16_t *rows = sh1106_get_zh16_glyph(codepoint);
+    for (int row = 0; row < ZH16_SIZE; row++) {
+        for (int col = 0; col < ZH16_SIZE; col++) {
+            bool on = (rows[row] & (0x8000U >> col)) != 0;
+            SH1106_DrawPixel(x + col, y + row, on);
+        }
+    }
+}
+
+// 逐字节读取续字节，遇到无效字节时留给下次解码。
+static uint32_t sh1106_next_codepoint(const unsigned char **cursor)
+{
+    const uint32_t replacement = 0xFFFD;
+    uint32_t lead = **cursor;
+    (*cursor)++;
+    if (lead < 0x80) {
+        return lead;
+    }
+
+    uint32_t codepoint;
+    uint32_t minimum;
+    int remaining;
+    if (lead >= 0xC2 && lead <= 0xDF) {
+        codepoint = lead & 0x1F;
+        minimum = 0x80;
+        remaining = 1;
+    } else if (lead >= 0xE0 && lead <= 0xEF) {
+        codepoint = lead & 0x0F;
+        minimum = 0x800;
+        remaining = 2;
+    } else if (lead >= 0xF0 && lead <= 0xF4) {
+        codepoint = lead & 0x07;
+        minimum = 0x10000;
+        remaining = 3;
+    } else {
+        return replacement;
+    }
+
+    for (int i = 0; i < remaining; i++) {
+        uint32_t next = **cursor;
+        if ((next & 0xC0) != 0x80) {
+            return replacement;
+        }
+        codepoint = (codepoint << 6) | (next & 0x3F);
+        (*cursor)++;
+    }
+
+    if (codepoint < minimum || codepoint > 0x10FFFF ||
+        (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
+        return replacement;
+    }
+    return codepoint;
+}
+
 void SH1106_DrawString(int x, int y, const char *str)
 {
-    if (str == NULL) return;
+    if (str == NULL || x >= SH1106_WIDTH || y >= SH1106_HEIGHT) {
+        return;
+    }
 
+    const unsigned char *cursor = (const unsigned char *)str;
+    const unsigned char *scan = cursor;
+    while (*scan != '\0' && *scan < 0x80) {
+        scan++;
+    }
+    // 全部是 ASCII 时保留原来的 8 像素行高。
+    int line_height = (*scan == '\0') ? ASCII_HEIGHT : ZH16_SIZE;
     int start_x = x;
 
-    while (*str != '\0') {
-        if (*str == '\n') {
+    while (*cursor != '\0' && y <= SH1106_HEIGHT - line_height) {
+        uint32_t codepoint = sh1106_next_codepoint(&cursor);
+        if (codepoint == '\n') {
             x = start_x;
-            y += 8;
-            str++;
+            y += line_height;
             continue;
         }
 
-        if (x + 6 > SH1106_WIDTH) {
+        bool ascii = codepoint < 0x80;
+        int width = ascii ? ASCII_WIDTH : ZH16_SIZE;
+        if (x != start_x && x > SH1106_WIDTH - width) {
             x = start_x;
-            y += 8;
+            y += line_height;
+            if (y > SH1106_HEIGHT - line_height) {
+                break;
+            }
         }
 
-        if (y + 8 > SH1106_HEIGHT) {
-            break;
+        if (ascii) {
+            SH1106_DrawChar(x, y + (line_height - ASCII_HEIGHT) / 2,
+                           (char)codepoint);
+        } else {
+            sh1106_draw_zh16(x, y, codepoint);
         }
-
-        SH1106_DrawChar(x, y, *str);
-
-        x += 6;
-        str++;
+        x += width;
     }
 }

@@ -32,14 +32,14 @@ void app_main(void)
         SH1106_Clear();
 
         // 显示固定内容
-        SH1106_DrawString(0, 0, "HELLO ESP32-S3");
-        SH1106_DrawString(0, 16, "SH1106 OLED");
+        SH1106_DrawString(0, 0, "你好 ESP32-S3");
+        SH1106_DrawString(0, 16, "显示正常");
 
         // 显示动态计数
         snprintf(
             text,
             sizeof(text),
-            "COUNT: %lu",
+            "计数: %lu",
             (unsigned long)count++
         );
 
