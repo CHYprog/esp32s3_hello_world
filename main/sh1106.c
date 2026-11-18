@@ -407,3 +407,24 @@ void SH1106_DrawString(int x, int y, const char *str)
         x += width;
     }
 }
+
+
+/**
+ * @brief 设置 OLED 垂直滚动位置
+ */
+esp_err_t SH1106_SetScrollOffset(uint8_t offset)
+{
+    // 检查 OLED 是否初始化
+    if (s_dev == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 检查偏移量是否合法
+    if (offset >= SH1106_HEIGHT) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 设置显示起始行
+    return sh1106_cmd(0x40 | offset);
+}
+

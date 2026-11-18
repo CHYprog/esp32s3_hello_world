@@ -114,4 +114,16 @@ void SH1106_DrawString(int x, int y, const char *str);
  */
 esp_err_t SH1106_Update(void);
 
+
+/**
+ * @brief 设置 OLED 的垂直滚动偏移
+ *
+ * @param offset 滚动偏移量，范围 0～63，单位为像素
+ *
+ * @return ESP_OK 成功，其他值表示失败
+ *
+ * @note 只改变显示起始行，不修改显示缓冲区
+ */
+esp_err_t SH1106_SetScrollOffset(uint8_t offset);
+
 #endif
