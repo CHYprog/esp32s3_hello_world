@@ -142,6 +142,18 @@ void SH1106_ScrollHorizontalArea(
     int pixels
 );
 
-
+/**
+ * @brief 将128×64单色图片加载到OLED显示缓冲区
+ *
+ * @param bitmap 图片数据指针，必须包含1024字节
+ *
+ * @note 图片格式为SH1106页式格式：
+ *       每128字节为一页，共8页。
+ *       每字节的bit0对应页面顶部像素。
+ *
+ * @note 本函数只修改缓冲区，
+ *       需要调用SH1106_Update()刷新屏幕。
+ */
+void SH1106_DrawBitmap(const uint8_t *bitmap);
 
 #endif

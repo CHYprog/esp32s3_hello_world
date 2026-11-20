@@ -1,2 +1,12 @@
 CompileFlags:
-    Remove: [-f*, -m*]
+  CompilationDatabase: build
+  Remove: [-f*, -m*]
+  Add: [-mcpu=esp32s3]
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Diagnostics:
+  UnusedIncludes: None

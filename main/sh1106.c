@@ -503,3 +503,20 @@ void SH1106_ScrollHorizontalArea(
         }
     }
 }
+
+/**
+ * @brief 绘制128×64全屏单色位图
+ */
+void SH1106_DrawBitmap(const uint8_t *bitmap)
+{
+    if (bitmap == NULL)
+    {
+        return;
+    }
+
+    memcpy(
+        s_buffer,
+        bitmap,
+        sizeof(s_buffer)
+    );
+}
